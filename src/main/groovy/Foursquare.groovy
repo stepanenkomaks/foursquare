@@ -4,7 +4,6 @@ class Foursquare {
         def latitude = "40.748574"
         def longitude = "-73.985918"
 
-
-        println "The current location is: " + FindPlace.findPlace(latitude, longitude)
+        println "Your location is: " + FindPlaces.findPlace("40.748574", "-73.985918")
     }
 }
