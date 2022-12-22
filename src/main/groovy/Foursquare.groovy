@@ -1,9 +1,23 @@
 class Foursquare {
+    private static def service = new FoursquareService()
+    private static def scanner = new Scanner(System.in)
 
     static void main(String[] args) {
-        def latitude = "40.748574"
-        def longitude = "-73.985918"
+        def latitude, longitude
+        while (true) {
+            try {
+                println "Enter latitude:"
+                latitude = scanner.nextFloat()
+                println "Enter longitude:"
+                longitude = scanner.nextFloat()
+                if (latitude >= -180 && latitude <= 180 && longitude >= -180 && longitude <= 180) break
+                else println "These are not valid coordinates. Try again!"
+            } catch (InputMismatchException exception) {
+                println "This is not the right coordinate. Try again!"
+                scanner.next()
+            }
+        }
 
-        println "Your location is: " + FindPlaces.findPlace("40.748574", "-73.985918")
+        println service.findPlace(latitude, longitude)
     }
 }
