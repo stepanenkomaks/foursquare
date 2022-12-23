@@ -6,15 +6,19 @@ import java.util.stream.IntStream
 
 class FoursquareService implements APIService{
     private final def CLIENT_SECRET = "fsq3vUjmxgnoFhn/6nTEvSYxsoQw+VKzY9gf5Q6u4c2du0Q="
+    private final int RADIUS_1 = 50
+    private final int RADIUS_2 = 100
+    private final JsonSlurper jsonSlurper = new JsonSlurper()
+    private final def scanner = new Scanner(System.in)
 
     FoursquareService() {}
 
     @Override
     def findPlace(latitude, longitude) {
-        def result = findLocationAdditional(CLIENT_SECRET, latitude, longitude, 50)
+        def result = findLocationAdditional(CLIENT_SECRET, latitude, longitude, RADIUS_1)
 
         if (result.isEmpty()) {
-            result = findLocationAdditional(CLIENT_SECRET, latitude, longitude, 100)
+            result = findLocationAdditional(CLIENT_SECRET, latitude, longitude, RADIUS_2)
             if (result.isEmpty())
                 return "Couldn't find any places nearby"
         }
@@ -29,11 +33,13 @@ class FoursquareService implements APIService{
             parent = null
         }
 
+//        def checkAverage = IntStream.of(result["distance"] as int[]).max().getAsInt().compareTo(1,5 * averageDistance)
+
         def places = new ArrayList<>()
 
         for (def d : result) {
-            //Отбрасываем всех, кто находится дальше средней дистанции
-            if (d["distance"] <= averageDistance) {
+            //Отбрасываем всех, кто находится дальше средней дистанции, умноженной на 1,5
+            if (d["distance"] <= (1.5 * averageDistance)) {
                 //Если пэерент у ближайшей локации есть, тогда добавляем места только с пэрентами
                 if (parent != null) {
                     if (d["related_places"]["parent"] != null) {
@@ -46,7 +52,10 @@ class FoursquareService implements APIService{
             }
         }
 
-        return "Your location is: " + selectPlace(places) + parent
+        //Если всего 1 место, то сразу возвращаем его
+        if (places.size() == 1) return places[0]["name"] + parent
+
+        return "Your location is: " + selectCategory(places) + parent
     }
 
     //метод для получения списка локаций по заданому радиусу и координатам
@@ -58,25 +67,51 @@ class FoursquareService implements APIService{
         request.addHeader("Authorization", clientSecret)
 
         def response = new DefaultHttpClient().execute(request)
-        def result = new JsonSlurper().parse(response.entity.content)["results"]
-
-        return result
+        //Проверка на то, прошел ли запрос
+        if (response.getStatusLine().getStatusCode() == 200) {
+            def result = jsonSlurper.parse(response.entity.content)["results"]
+            return result
+        } else {
+            throw new RuntimeException("Something went wrong with connection to FoursquareApi. Try again later!")
+        }
     }
 
     //Метод, который позволяет выбрать соответствующую категорию, для уточнения места
-    private def selectPlace(places) {
-        def scanner = new Scanner(System.in)
+    private def selectCategory(places) {
+        def uniqueCategories = places.collect {it["categories"]["name"][0]} as Set
+        if (uniqueCategories.size() == 1) return selectPlace(places["name"])
 
         while (true) {
             println "Select category of your location:"
-            def uniqueCategories = places.collect {it["categories"]["name"][0]} as Set
             uniqueCategories.each(s -> println " * " + s)
 
             def category = scanner.nextLine()
 
-            for (def p : places) {
-                if (category == p["categories"]["name"][0])
-                    return p["name"]
+            //Когда мы определились с категорией, собираем все локации, которые в ней находятся
+            def listOfPlacesInUserCategory = places.findAll { it["categories"]["name"][0] == category }.collect {it["name"]}
+
+            if (listOfPlacesInUserCategory.size() == 0)
+                println "Choose the right category!"
+            else if (listOfPlacesInUserCategory.size() == 1)
+                return listOfPlacesInUserCategory[0]["name"]
+            else {
+                println "There are different locations in this category"
+                return selectPlace(listOfPlacesInUserCategory)
+            }
+        }
+    }
+
+    //Метод для нахождения конкретного места
+    private def selectPlace(listOfPlacesInUserCategory) {
+        while (true) {
+            println "Please, select your location:"
+            listOfPlacesInUserCategory.each(s -> println " * " + s)
+
+            def name = scanner.nextLine()
+
+            for (def p : listOfPlacesInUserCategory) {
+                if (p == name)
+                    return p
             }
 
             println "Choose the right category!"
